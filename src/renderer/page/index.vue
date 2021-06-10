@@ -189,7 +189,6 @@
 
 <script>
 import { Service, getConfig, setConfig } from '../../service';
-// const path = require('path');
 
 const se = new Service();
 export default {
@@ -217,11 +216,6 @@ export default {
     };
   },
   mounted() {
-    // eslint-disable-next-line no-underscore-dangle
-    alert(global.__static);
-    // alert(__dirname);
-    // alert(process.cwd());
-    // alert(path.join(process.cwd(), 'ss'));
     if (getConfig() != null) {
       this.sData = getConfig();
       if (this.sData.status === 1) {
@@ -263,9 +257,10 @@ export default {
       se.createScheduleJobLogin();
       const s = await se.timingLeague();
       if (!s) {
-        this.warningAlert('今日无赛事～');
+        this.warningAlert('今日无赛事，未登陆～');
+      } else {
+        se.timingLeagueValid();
       }
-      se.timingLeagueValid();
     },
     details(gid) {
       const i = this.tableData.findIndex(item => item.GID === gid);

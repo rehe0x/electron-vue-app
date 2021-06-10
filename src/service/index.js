@@ -1,10 +1,16 @@
+/* eslint-disable no-alert */
 /* eslint-disable no-console */
+import path from 'path';
+// eslint-disable-next-line import/no-extraneous-dependencies
+// import { remote } from 'electron';
+
 const superagent = require('superagent');
 require('superagent-proxy')(superagent);
 
 const schedule = require('node-schedule');
 
 const fs = require('fs');
+
 const { getUserAgent, xml2json } = require('../common');
 
 
@@ -112,24 +118,24 @@ class Dao {
 
 const getUid = () => {
   try {
-    const j = fs.readFileSync('src/data/user.json');
+    const j = fs.readFileSync(path.join(__user_config, '/data/user.json'));
     const { uid } = JSON.parse(j).serverresponse;
     if (uid === undefined || uid.length === 0) {
       throw new Error('uid is null');
     }
     return uid;
   } catch (err) {
-    console.log('user is null');
+    alert('user is null');
   }
   return null;
 };
 
 const getConfig = () => {
   try {
-    const j = fs.readFileSync(`${__dirname}/static/config.json`);
+    const j = fs.readFileSync(path.join(__user_config, '/config.json'));
     return JSON.parse(j);
   } catch (err) {
-    console.log(err);
+    alert(err);
     return null;
   }
 };
@@ -144,9 +150,9 @@ const setConfig = (odds, float, time, refTime, status, username, password) => {
     ob.status = status;
     ob.username = username;
     ob.password = password;
-    fs.writeFileSync('src/config.json', JSON.stringify(ob));
+    fs.writeFileSync(path.join(__user_config, '/config.json'), JSON.stringify(ob));
   } catch (err) {
-    console.log(err);
+    alert(err);
   }
   return null;
 };
@@ -160,7 +166,7 @@ class Service {
     const config = getConfig();
     const r = await this.dao.login(config.username, config.password);
     const json = xml2json(r.text);
-    fs.writeFileSync('src/data/user.json', JSON.stringify(json));
+    fs.writeFileSync(path.join(__user_config, '/data/user.json'), JSON.stringify(json));
   }
   createScheduleJobLogin() {
     // eslint-disable-next-line no-unused-vars
@@ -173,7 +179,7 @@ class Service {
   async timingLeague() {
     const r = await this.dao.leagueAll(getUid());
     if (r.text === 'table id error') {
-      return true;
+      return false;
     }
     const json = xml2json(r.text);
     if (json.serverresponse.msg === 'doubleLogin') {
@@ -198,24 +204,13 @@ class Service {
     } else if (region instanceof Object) {
       list.push(json.serverresponse.classifier.region.$);
     }
-    fs.writeFileSync('src/data/league.json', JSON.stringify(list));
+    fs.writeFileSync(path.join(__user_config, '/data/league.json'), JSON.stringify(list));
     return true;
   }
 
   async leagueByIdAsync(uid, id, callback) {
     const re = await this.dao.leagueById(uid, id);
     callback(re);
-  }
-
-  testS(a, b) {
-    console.log(a, b);
-    schedule.scheduleJob('testS', '*/2 * * * * ?', () => {
-      console.log(a, b);
-      console.log(`testS:${new Date()}`);
-      console.log(`testS:${new Date()}`);
-      a = '123';
-      this.getUid();
-    });
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -242,7 +237,7 @@ class Service {
 
   // eslint-disable-next-line class-methods-use-this
   starData(data) {
-    let d = fs.readFileSync('src/data/star.json');
+    let d = fs.readFileSync(path.join(__user_config, '/data/star.json'));
     if (d && d.length === 0) {
       d = '[]';
     }
@@ -251,11 +246,11 @@ class Service {
     if (i === -1) {
       ad.push(data);
     }
-    fs.writeFileSync('src/data/star.json', JSON.stringify(ad));
+    fs.writeFileSync(path.join(__user_config, '/data/star.json'), JSON.stringify(ad));
   }
 
   pushData(data) {
-    let d = fs.readFileSync('src/data/mon.json');
+    let d = fs.readFileSync(path.join(__user_config, '/data/mon.json'));
     if (d && d.length === 0) {
       d = '[]';
     }
@@ -281,7 +276,7 @@ class Service {
         data.IOR_RC, data.IOR_RH, data.DATETIME, new Date().getTime(),
       ));
     }
-    fs.writeFileSync('src/data/mon.json', JSON.stringify(ad));
+    fs.writeFileSync(path.join(__user_config, '/data/mon.json'), JSON.stringify(ad));
   }
 
   createScheduleJob(name, time, lid, gid, IOR_RH, IOR_RC) {
@@ -352,7 +347,7 @@ class Service {
 
   timingLeagueValid() {
     const config = getConfig();
-    const lj = fs.readFileSync('src/data/league.json');
+    const lj = fs.readFileSync(path.join(__user_config, '/data/league.json'));
     const ljs = JSON.parse(lj);
 
     if (ljs) {
@@ -362,7 +357,6 @@ class Service {
             return;
           }
           const json = xml2json(data.text);
-          console.log(json);
           if (json.serverresponse.msg === 'doubleLogin') {
             console.log('not Login');
             return;
@@ -371,7 +365,6 @@ class Service {
           if (ec instanceof Array) {
             ec.forEach((item1) => {
               if ((Number(item1.game.IOR_RH) + Number(item1.game.IOR_RC)) > config.odds) {
-                console.log(item1);
                 this.createScheduleJob(
                   item1.game.GID, `0/${config.refTime} * * * * ?`, item.id, item1.game.GID,
                   item1.game.IOR_RH, item1.game.IOR_RC,
@@ -380,7 +373,6 @@ class Service {
             });
           } else if (ec instanceof Object) {
             if ((Number(ec.game.IOR_RH) + Number(ec.game.IOR_RC)) > config.odds) {
-              console.log(ec);
               this.createScheduleJob(
                 ec.game.GID, `0/${config.refTime} * * * * ?`, item.id,
                 ec.game.GID, ec.game.IOR_RH, ec.game.IOR_RC,
@@ -403,10 +395,10 @@ class Service {
   // eslint-disable-next-line class-methods-use-this
   getLeagueMon() {
     try {
-      const j = fs.readFileSync('src/data/mon.json');
+      const j = fs.readFileSync(path.join(__user_config, '/data/mon.json'));
       return JSON.parse(j);
     } catch (err) {
-      console.log(err);
+      alert(err);
       return null;
     }
   }
@@ -414,10 +406,10 @@ class Service {
   // eslint-disable-next-line class-methods-use-this
   getStarData() {
     try {
-      const j = fs.readFileSync('src/data/star.json');
+      const j = fs.readFileSync(path.join(__user_config, '/data/star.json'));
       return JSON.parse(j);
     } catch (err) {
-      console.log(err);
+      alert(err);
       return null;
     }
   }

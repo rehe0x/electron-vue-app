@@ -30,12 +30,8 @@
     "asar": true,
     "extraResources": [
       {
-        "from": "src/data/**",
-        "to": "../"
-      },
-      {
-        "from": "src/config.json",
-        "to": "../"
+        "from": "./config",
+        "to": "../config/"
       }
     ],
     "dmg": {

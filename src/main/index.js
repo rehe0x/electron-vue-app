@@ -7,6 +7,7 @@ import '../renderer/store';
  */
 if (process.env.NODE_ENV !== 'development') {
   global.__static = require('path').join(__dirname, '/static').replace(/\\/g, '\\\\') // eslint-disable-line
+  global.__user_config = require('path').join(__dirname, '../../../../', '/config').replace(/\\/g, '\\\\') // eslint-disable-line
 }
 
 let mainWindow;
