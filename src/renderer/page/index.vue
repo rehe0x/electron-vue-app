@@ -297,8 +297,11 @@ export default {
       }
     },
     async on() {
-      this.successAlert();
-      await se.timingLogin();
+      const l = await se.timingLogin();
+      if (!l) {
+        this.errorAlert('网站服务器异常~');
+        return;
+      }
       se.createScheduleJobLogin();
       const s = await se.timingLeague();
       if (!s) {
@@ -306,6 +309,7 @@ export default {
       } else {
         se.timingLeagueValid();
       }
+      this.successAlert();
     },
     details(gid) {
       const i = this.tableData.findIndex(item => item.GID === gid);

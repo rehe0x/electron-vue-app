@@ -6,7 +6,7 @@
 
 <script>
   export default {
-    name: 'electron-vue-app',
+    name: 'zq-bot',
   };
 </script>
 

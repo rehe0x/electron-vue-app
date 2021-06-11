@@ -173,9 +173,14 @@ class Service {
 
   async timingLogin() {
     const config = getConfig();
-    const r = await this.dao.login(config.username, config.password);
-    const json = xml2json(r.text);
-    fs.writeFileSync(path.join(__user_config, '/data/user.json'), JSON.stringify(json));
+    try {
+      const r = await this.dao.login(config.username, config.password);
+      const json = xml2json(r.text);
+      fs.writeFileSync(path.join(__user_config, '/data/user.json'), JSON.stringify(json));
+      return true;
+    } catch (err) {
+      return false;
+    }
   }
   createScheduleJobLogin() {
     // eslint-disable-next-line no-unused-vars
