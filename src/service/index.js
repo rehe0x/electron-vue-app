@@ -130,7 +130,7 @@ const getUid = () => {
     const j = fs.readFileSync(path.join(__user_config, '/data/user.json'));
     const { uid } = JSON.parse(j).serverresponse;
     if (uid === undefined || uid.length === 0) {
-      throw new Error('uid is null');
+      throw new Error('请更换账号试试～～');
     }
     return uid;
   } catch (err) {
