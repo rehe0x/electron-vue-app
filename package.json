@@ -19,7 +19,7 @@
     "postinstall": "npm run lint:fix"
   },
   "build": {
-    "productName": "electron-vue-app",
+    "productName": "zq-bot",
     "appId": "com.rehe",
     "directories": {
       "output": "build"
