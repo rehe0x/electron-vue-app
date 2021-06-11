@@ -241,6 +241,7 @@ export default {
   mounted() {
     // 将vue中的方法赋值给window
     window.setCurrent = this.setCurrent;
+    window.errorAlert = this.errorAlert;
     if (getConfig() != null) {
       this.sData = getConfig();
       if (this.sData.status === 1) {

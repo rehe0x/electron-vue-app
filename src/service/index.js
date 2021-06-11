@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-alert */
 /* eslint-disable no-console */
@@ -133,7 +134,7 @@ const getUid = () => {
     }
     return uid;
   } catch (err) {
-    alert('user is null');
+    errorAlert(err);
   }
   return null;
 };
@@ -143,7 +144,7 @@ const getConfig = () => {
     const j = fs.readFileSync(path.join(__user_config, '/config.json'));
     return JSON.parse(j);
   } catch (err) {
-    alert(err);
+    errorAlert(err);
     return null;
   }
 };
@@ -160,7 +161,7 @@ const setConfig = (odds, float, time, refTime, status, username, password) => {
     ob.password = password;
     fs.writeFileSync(path.join(__user_config, '/config.json'), JSON.stringify(ob));
   } catch (err) {
-    alert(err);
+    errorAlert(err);
   }
   return null;
 };
@@ -358,6 +359,7 @@ class Service {
     const config = getConfig();
     const lj = fs.readFileSync(path.join(__user_config, '/data/league.json'));
     const ljs = JSON.parse(lj);
+    // getUid();
     if (ljs) {
       ljs.forEach((item) => {
         this.dao.leagueById(getUid(), item.id, (data) => {
@@ -409,7 +411,7 @@ class Service {
       const j = fs.readFileSync(path.join(__user_config, '/data/mon.json'));
       return JSON.parse(j);
     } catch (err) {
-      alert(err);
+      errorAlert(err);
       return null;
     }
   }
@@ -432,7 +434,7 @@ class Service {
       arr.splice(arr.findIndex(item => item.GID === data.GID), 1);
       fs.writeFileSync(path.join(__user_config, '/data/mon.json'), JSON.stringify(arr));
     } catch (err) {
-      alert(err);
+      errorAlert(err);
     }
   }
 
@@ -444,7 +446,7 @@ class Service {
       arr.splice(arr.findIndex(item => item.GID === data.GID), 1);
       fs.writeFileSync(path.join(__user_config, '/data/star.json'), JSON.stringify(arr));
     } catch (err) {
-      alert(err);
+      errorAlert(err);
     }
   }
 }
