@@ -38,6 +38,20 @@
             prop="IOR_RH"
             label="水位H">
           </el-table-column>
+          <el-table-column
+            :formatter="dateFormat"
+            prop="CDATE"
+            label="时间"
+            width=100>
+          </el-table-column>
+          <el-table-column
+            label="操作"
+            width="90">
+            <template slot-scope="scope">
+              <el-button type="text" @click="details(scope.row.GID)">查看</el-button>
+              <el-button type="text" @click="delStar(scope.row)">取消</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
       <div class="page1-right">
@@ -74,7 +88,6 @@
           <el-form-item>
             <el-button type="primary"  v-if="sData.status === 1" @click="start" style="width: 40%;">关闭监控</el-button>
             <el-button type="primary"  v-if="sData.status === 0" @click="start" style="width: 40%;">开启监控</el-button>
-
           </el-form-item>
         </el-form>
       </div>
@@ -85,14 +98,21 @@
           <label>预警列表</label>
         </div>
         <el-table
+          ref="singleTable"
           :data="tableData"
           height="100%"
+          highlight-current-row
+          @current-change="handleCurrentChange"
           :header-row-style="{height: '0'}"
           :header-cell-style="{padding: '0'}"
           :row-style="{height: '0'}"
           :cell-style="{padding: '0'}"
           border
           style="width: 100%">
+          <!-- <el-table-column
+            type="index"
+            width="50">
+          </el-table-column> -->
           <el-table-column
             prop="LEAGUE"
             label="联赛">
@@ -108,22 +128,22 @@
            <el-table-column
             prop="RATIO_R"
             label="变盘"
-            width=50>
+            width=60>
           </el-table-column>
           <el-table-column
             prop="IOR_RC"
             label="上"
-            width=50>
+            width=60>
           </el-table-column>
           <el-table-column
             prop="IOR_RH"
             label="下"
-            width=50>
+            width=60>
           </el-table-column>
           <el-table-column
             prop="DATETIME"
             label="日期"
-            width=90>
+            width=95>
           </el-table-column>
           <!-- <el-table-column
             prop="CDATE"
@@ -132,10 +152,11 @@
           </el-table-column> -->
           <el-table-column
             label="操作"
-            width="100">
+            width="110">
             <template slot-scope="scope">
               <el-button type="text" @click="details(scope.row.GID)">查看</el-button>
               <el-button type="text" @click="star(scope.row)">关注</el-button>
+              <el-button type="text" @click="del(scope.row)">删除</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -165,22 +186,23 @@
         <el-table-column
         prop="RATIO_R"
         label="变盘"
-        width=50>
+        width=60>
       </el-table-column>
       <el-table-column
         prop="IOR_RC"
         label="上"
-        width=50>
+        width=60>
       </el-table-column>
       <el-table-column
         prop="IOR_RH"
         label="下"
-        width=50>
+        width=60>
       </el-table-column>
       <el-table-column
-        prop="DATETIME"
+        :formatter="dateFormat"
+        prop="CDATE"
         label="时间"
-        width=90>
+        width=100>
       </el-table-column>
     </el-table>
   </el-dialog>
@@ -188,6 +210,7 @@
 </template>
 
 <script>
+import moment from 'moment';
 import { Service, getConfig, setConfig } from '../../service';
 
 const se = new Service();
@@ -216,6 +239,8 @@ export default {
     };
   },
   mounted() {
+    // 将vue中的方法赋值给window
+    window.setCurrent = this.setCurrent;
     if (getConfig() != null) {
       this.sData = getConfig();
       if (this.sData.status === 1) {
@@ -226,13 +251,32 @@ export default {
         clearInterval(this.timer);
       } else {
         this.timer = setInterval(() => {
-          this.tableData = se.getLeagueMon();
+          // this.tableData = se.getLeagueMon();
         }, 3000);
       }
     }
     this.starData = se.getStarData();
   },
   methods: {
+    // 时间格式化
+    dateFormat(row, column) {
+      const date = row[column.property];
+      if (date === undefined) {
+        return '';
+      }
+      return moment(date).format('MMDD HH:mm:ss');
+    },
+    setCurrent(gid) {
+      if (!gid) {
+        return;
+      }
+      this.tableData = se.getLeagueMon();
+      const i = this.tableData.findIndex(item => item.GID === gid);
+      this.$refs.singleTable.setCurrentRow(this.tableData[i]);
+    },
+    handleCurrentChange(val) {
+      this.currentRow = val;
+    },
     async start() {
       if (this.sData.username.length === 0 || this.sData.password.length === 0) {
         this.errorAlert('请输入账号密码');
@@ -274,6 +318,16 @@ export default {
       se.starData(data);
       this.starData = se.getStarData();
       this.successAlert();
+    },
+    del(data) {
+      se.del(data);
+      this.successAlert();
+      this.tableData = se.getLeagueMon();
+    },
+    delStar(data) {
+      se.delStar(data);
+      this.successAlert();
+      this.starData = se.getStarData();
     },
     successAlert() {
       this.$notify({
@@ -321,5 +375,9 @@ export default {
 
   >>> .el-dialog__body {
     padding: 0px 20px;
+  }
+
+  >>> .el-button+.el-button {
+    margin-left: 0px;
   }
 </style>

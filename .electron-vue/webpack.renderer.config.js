@@ -2,6 +2,7 @@
 
 process.env.BABEL_ENV = 'renderer'
 
+const TerserPlugin = require("terser-webpack-plugin");
 const path = require('path')
 const { dependencies } = require('../package.json')
 const webpack = require('webpack')
@@ -160,7 +161,24 @@ let rendererConfig = {
     },
     extensions: ['.js', '.vue', '.json', '.css', '.node']
   },
-  target: 'electron-renderer'
+  target: 'electron-renderer',
+  optimization: {
+    minimize: true,
+    minimizer: [
+      new TerserPlugin({ // 要引用 TerserPlugin
+        terserOptions: {
+          ecma: undefined,
+          warnings: false,
+          parse: {},
+          compress: {
+            drop_console: true,
+            drop_debugger: false,
+            pure_funcs: ['console.log'] // 移除console
+          }
+        },
+      }),
+    ],
+  }
 }
 
 /**

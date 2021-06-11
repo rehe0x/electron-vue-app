@@ -1,3 +1,4 @@
+/* eslint-disable prefer-destructuring */
 /* eslint-disable no-alert */
 /* eslint-disable no-console */
 import path from 'path';
@@ -38,7 +39,7 @@ class Dao {
 
   login(username, password) {
     return this.agent
-      .post('https://m702.hga030.com/transform.php')
+      .post('https://hga030.com/transform.php')
       .send({
         p: 'chk_login',
         langx: 'en-us',
@@ -62,7 +63,7 @@ class Dao {
 
   leagueAll(uid) {
     return this.agent
-      .post('https://m702.hga030.com/transform.php')
+      .post('https://hga030.com/transform.php')
       .send({
         p: 'get_league_list_All',
         uid,
@@ -86,9 +87,9 @@ class Dao {
       .disableTLSCerts();
   }
 
-  leagueById(uid, lid) {
-    return this.agent
-      .post('https://m702.hga030.com/transform.php')
+  leagueById(uid, lid, callback) {
+    this.agent
+      .post('https://hga030.com/transform.php')
       .send({
         uid,
         langx: 'zh-cn',
@@ -112,7 +113,14 @@ class Dao {
         response: 50000,
         deadline: 50000,
       })
-      .disableTLSCerts();
+      .disableTLSCerts()
+      .end((err, res) => {
+        if (err) {
+          console.log(err);
+          return;
+        }
+        callback(res);
+      });
   }
 }
 
@@ -183,7 +191,7 @@ class Service {
     }
     const json = xml2json(r.text);
     if (json.serverresponse.msg === 'doubleLogin') {
-      return true;
+      return false;
     }
     const list = [];
     if (!json.serverresponse.classifier) {
@@ -206,11 +214,6 @@ class Service {
     }
     fs.writeFileSync(path.join(__user_config, '/data/league.json'), JSON.stringify(list));
     return true;
-  }
-
-  async leagueByIdAsync(uid, id, callback) {
-    const re = await this.dao.leagueById(uid, id);
-    callback(re);
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -256,42 +259,46 @@ class Service {
     }
     const ad = JSON.parse(d);
     const i = ad.findIndex(item => item.GID === data.GID);
+    const RC = +Number(data.IOR_RC).toFixed(2);
+    const RH = +Number(data.IOR_RH).toFixed(2);
     if (i === -1) {
       const obj = this.leagueObj(
         data.GID, data.LEAGUE, data.TEAM_H, data.TEAM_C, data.RATIO_R,
-        data.IOR_RC, data.IOR_RH, data.DATETIME, new Date().getTime(),
+        RC, RH, data.DATETIME, new Date().getTime(),
       );
       const o1 = Object.assign({}, obj);
       const arr = [];
       arr.push(obj);
       o1.arr = arr;
-      ad[i].push(o1);
+      ad.push(o1);
     } else {
       ad[i].RATIO_R = data.RATIO_R;
-      ad[i].IOR_RC = data.IOR_RC;
-      ad[i].IOR_RH = data.IOR_RH;
+      ad[i].IOR_RC = RC;
+      ad[i].IOR_RH = RH;
       ad[i].CDATE = new Date().getTime();
       ad[i].arr.push(this.leagueObj(
         data.GID, data.LEAGUE, data.TEAM_H, data.TEAM_C, data.RATIO_R,
-        data.IOR_RC, data.IOR_RH, data.DATETIME, new Date().getTime(),
+        RC, RH, data.DATETIME, new Date().getTime(),
       ));
     }
     fs.writeFileSync(path.join(__user_config, '/data/mon.json'), JSON.stringify(ad));
+    // eslint-disable-next-line no-undef
+    setCurrent(data.GID);
   }
 
   createScheduleJob(name, time, lid, gid, IOR_RH, IOR_RC) {
     const job = schedule.scheduledJobs[name];
-    console.log('job========', schedule.scheduledJobs);
     if (job) {
       return;
     }
     const config = getConfig();
     let ctime = new Date().getTime();
 
-    const j = schedule.scheduleJob(name, time, () => {
+    schedule.scheduleJob(name, time, () => {
       console.log(`${name}==========:${new Date()}`);
-      this.leagueByIdAsync(getUid(), lid, (data) => {
+      this.dao.leagueById(getUid(), lid, (data) => {
         if (data.text === 'table id error') {
+          console.log('table id error');
           return;
         }
         const json = xml2json(data.text);
@@ -299,47 +306,49 @@ class Service {
           console.log('not Login');
           return;
         }
+        let item = null;
         const { ec } = json.serverresponse;
         if (ec instanceof Array) {
-          ec.forEach((item) => {
-            if (gid === item.game.GID) {
-              const s1 = Number(IOR_RH) + Number(IOR_RC);
-              const s2 = Number(item.game.IOR_RH) + Number(item.game.IOR_RC);
-              if (Math.abs(s1 - s2) >= config.float) {
-                if (ctime === null) {
-                  // 加入
-                  this.pushData(item.game);
-                } else if ((ctime + (1000 * 60 * config.time)) > new Date().getTime()) {
-                  //  加入
-                  ctime = null;
-                  this.pushData(item.game);
-                } else {
-                  // 删除任务
-                  console.log('删除任务', name);
-                  j.cancel();
-                }
-              }
-            }
-          });
+          const i = ec.findIndex(item => item.game.GID === gid);
+          if (i !== -1) {
+            item = ec[i];
+          }
         } else if (ec instanceof Object) {
           if (gid === ec.game.GID) {
-            const s1 = Number(IOR_RH) + Number(IOR_RC);
-            const s2 = Number(ec.game.IOR_RH) + Number(ec.game.IOR_RC);
-            if (Math.abs(s1 - s2) >= config.float) {
-              if (ctime === null) {
-                // 加入
-                this.pushData(ec.game);
-              } else if ((ctime + (1000 * 60 * config.time)) > new Date().getTime()) {
-                //  加入
-                ctime = null;
-                this.pushData(ec.game);
-              } else {
-                // 删除任务
-                console.log('删除任务', name);
-                j.cancel();
-              }
-            }
+            item = ec;
           }
+        } else {
+          console.log(name, '请求错误');
+        }
+        if (!item) {
+          return;
+        }
+        const RC = +Number(item.game.IOR_RC).toFixed(2);
+        const RH = +Number(item.game.IOR_RH).toFixed(2);
+
+        const s1 = IOR_RC + IOR_RH;
+        const s2 = RC + RH;
+
+        if (ctime === null) {
+          console.log(name, item.game.GID, IOR_RC, RC, IOR_RH, RH);
+          if (IOR_RC !== RC || IOR_RH !== RH) {
+            // 加入
+            IOR_RC = RC;
+            IOR_RH = RH;
+            this.pushData(item.game);
+          }
+        } else if ((ctime + (1000 * 60 * config.time)) > new Date().getTime()) {
+          if (Math.abs(s1 - s2) >= config.float) {
+            //  加入
+            ctime = null;
+            IOR_RC = RC;
+            IOR_RH = RH;
+            this.pushData(item.game);
+          }
+        } else {
+          // 删除任务
+          console.log('删除任务', name);
+          schedule.scheduledJobs[name].cancel();
         }
       });
     });
@@ -349,11 +358,11 @@ class Service {
     const config = getConfig();
     const lj = fs.readFileSync(path.join(__user_config, '/data/league.json'));
     const ljs = JSON.parse(lj);
-
     if (ljs) {
       ljs.forEach((item) => {
-        this.leagueByIdAsync(getUid(), item.id, (data) => {
+        this.dao.leagueById(getUid(), item.id, (data) => {
           if (data.text === 'table id error') {
+            console.log('table id error');
             return;
           }
           const json = xml2json(data.text);
@@ -364,19 +373,21 @@ class Service {
           const { ec } = json.serverresponse;
           if (ec instanceof Array) {
             ec.forEach((item1) => {
-              if ((Number(item1.game.IOR_RH) + Number(item1.game.IOR_RC)) > config.odds) {
-                this.createScheduleJob(
-                  item1.game.GID, `0/${config.refTime} * * * * ?`, item.id, item1.game.GID,
-                  item1.game.IOR_RH, item1.game.IOR_RC,
-                );
+              const RC = +Number(item1.game.IOR_RC).toFixed(2);
+              const RH = +Number(item1.game.IOR_RH).toFixed(2);
+              if ((RC + RH) > config.odds) {
+                const r = Number(config.refTime) + 0;
+                const time = `0/${r} * * * * ?`;
+                this.createScheduleJob(item1.game.GID, time, item.id, item1.game.GID, RH, RC);
               }
             });
           } else if (ec instanceof Object) {
-            if ((Number(ec.game.IOR_RH) + Number(ec.game.IOR_RC)) > config.odds) {
-              this.createScheduleJob(
-                ec.game.GID, `0/${config.refTime} * * * * ?`, item.id,
-                ec.game.GID, ec.game.IOR_RH, ec.game.IOR_RC,
-              );
+            const RC = +Number(ec.game.IOR_RC).toFixed(2);
+            const RH = +Number(ec.game.IOR_RH).toFixed(2);
+            if ((RC + RH) > config.odds) {
+              const r = Number(config.refTime) + 0;
+              const time = `0/${r} * * * * ?`;
+              this.createScheduleJob(ec.game.GID, time, item.id, ec.game.GID, RH, RC);
             }
           }
         });
@@ -409,8 +420,31 @@ class Service {
       const j = fs.readFileSync(path.join(__user_config, '/data/star.json'));
       return JSON.parse(j);
     } catch (err) {
-      alert(err);
       return null;
+    }
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  del(data) {
+    try {
+      const j = fs.readFileSync(path.join(__user_config, '/data/mon.json'));
+      const arr = JSON.parse(j);
+      arr.splice(arr.findIndex(item => item.GID === data.GID), 1);
+      fs.writeFileSync(path.join(__user_config, '/data/mon.json'), JSON.stringify(arr));
+    } catch (err) {
+      alert(err);
+    }
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  delStar(data) {
+    try {
+      const j = fs.readFileSync(path.join(__user_config, '/data/star.json'));
+      const arr = JSON.parse(j);
+      arr.splice(arr.findIndex(item => item.GID === data.GID), 1);
+      fs.writeFileSync(path.join(__user_config, '/data/star.json'), JSON.stringify(arr));
+    } catch (err) {
+      alert(err);
     }
   }
 }
