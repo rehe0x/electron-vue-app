@@ -1,3 +1,10 @@
-const utils = require('./utils');
+const { getUserAgent, xml2json } = require('./utils');
+const { getIP } = require('./ip');
+const getXdl = require('./proxy');
 
-module.exports = utils;
+module.exports = {
+  getUserAgent,
+  xml2json,
+  getIP,
+  getXdl,
+};

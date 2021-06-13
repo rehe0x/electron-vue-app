@@ -28,15 +28,15 @@
           </el-table-column>
            <el-table-column
             prop="RATIO_R"
-            label="变盘">
-          </el-table-column>
-          <el-table-column
-            prop="IOR_RC"
-            label="水位C">
+            label="让球">
           </el-table-column>
           <el-table-column
             prop="IOR_RH"
-            label="水位H">
+            label="主赔">
+          </el-table-column>
+          <el-table-column
+            prop="IOR_RC"
+            label="客赔">
           </el-table-column>
           <el-table-column
             :formatter="dateFormat"
@@ -66,7 +66,7 @@
               </el-form-item>
             </el-col>
             <el-col :span="12">
-              <el-form-item label="赔率">
+              <el-form-item label="浮动">
                 <el-input-number v-model="sData.float" :min="0.01" :max="1" :step="0.01" label="赔率" style="width: 80%;"></el-input-number>
               </el-form-item>
             </el-col>
@@ -127,17 +127,17 @@
           </el-table-column>
            <el-table-column
             prop="RATIO_R"
-            label="变盘"
-            width=60>
-          </el-table-column>
-          <el-table-column
-            prop="IOR_RC"
-            label="上"
+            label="让球"
             width=60>
           </el-table-column>
           <el-table-column
             prop="IOR_RH"
-            label="下"
+            label="主赔"
+            width=60>
+          </el-table-column>
+          <el-table-column
+            prop="IOR_RC"
+            label="客赔"
             width=60>
           </el-table-column>
           <el-table-column
@@ -185,17 +185,17 @@
       </el-table-column>
         <el-table-column
         prop="RATIO_R"
-        label="变盘"
-        width=60>
-      </el-table-column>
-      <el-table-column
-        prop="IOR_RC"
-        label="上"
+        label="让球"
         width=60>
       </el-table-column>
       <el-table-column
         prop="IOR_RH"
-        label="下"
+        label="主赔"
+        width=60>
+      </el-table-column>
+      <el-table-column
+        prop="IOR_RC"
+        label="客赔"
         width=60>
       </el-table-column>
       <el-table-column
@@ -297,12 +297,12 @@ export default {
       }
     },
     async on() {
-      const l = await se.timingLogin();
-      if (!l) {
-        this.errorAlert('网站服务器异常~');
-        return;
-      }
-      se.createScheduleJobLogin();
+      // const l = await se.timingLogin();
+      // if (!l) {
+      //   this.errorAlert('网站服务器异常~');
+      //   return;
+      // }
+      // se.createScheduleJobLogin();
       const s = await se.timingLeague();
       if (!s) {
         this.warningAlert('今日无赛事，未登陆～');

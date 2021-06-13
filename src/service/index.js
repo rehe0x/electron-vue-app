@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 /* eslint-disable no-undef */
 /* eslint-disable prefer-destructuring */
 /* eslint-disable no-alert */
@@ -13,7 +14,9 @@ const schedule = require('node-schedule');
 
 const fs = require('fs');
 
-const { getUserAgent, xml2json } = require('../common');
+const {
+  getUserAgent, xml2json, getXdl, getIP,
+} = require('../common');
 
 
 const baseHeader = {
@@ -40,7 +43,7 @@ class Dao {
 
   login(username, password) {
     return this.agent
-      .post('https://hga030.com/transform.php')
+      .post('https://m190.hga030.com/transform.php')
       .send({
         p: 'chk_login',
         langx: 'en-us',
@@ -64,10 +67,9 @@ class Dao {
 
   leagueAll(uid) {
     return this.agent
-      .post('https://hga030.com/transform.php')
+      .post('https://m190.hga030.com/transform.php')
       .send({
         p: 'get_league_list_All',
-        uid,
         langx: 'zh-cn',
         gtype: 'FT',
         FS: 'N',
@@ -90,9 +92,8 @@ class Dao {
 
   leagueById(uid, lid, callback) {
     this.agent
-      .post('https://hga030.com/transform.php')
+      .post('https://m190.hga030.com/transform.php')
       .send({
-        uid,
         langx: 'zh-cn',
         p: 'get_game_list',
         date: '0',
@@ -168,6 +169,8 @@ const setConfig = (odds, float, time, refTime, status, username, password) => {
 
 class Service {
   constructor() {
+    // const url = getXdl();
+    // getIP(url.proxyURL, url.proxyAuth);
     this.dao = new Dao();
   }
 
@@ -292,7 +295,7 @@ class Service {
     setCurrent(data.GID);
   }
 
-  createScheduleJob(name, time, lid, gid, IOR_RH, IOR_RC) {
+  createScheduleJob(name, time, lid, gid, IOR_RH, IOR_RC, RATIO_R) {
     const job = schedule.scheduledJobs[name];
     if (job) {
       return;
@@ -331,20 +334,21 @@ class Service {
         }
         const RC = +Number(item.game.IOR_RC).toFixed(2);
         const RH = +Number(item.game.IOR_RH).toFixed(2);
-
+        const RR = item.game.RATIO_R;
         const s1 = IOR_RC + IOR_RH;
         const s2 = RC + RH;
 
         if (ctime === null) {
-          console.log(name, item.game.GID, IOR_RC, RC, IOR_RH, RH);
-          if (IOR_RC !== RC || IOR_RH !== RH) {
+          console.log(name, item.game.GID, IOR_RC, RC, IOR_RH, RH, RATIO_R, RR);
+          if (IOR_RC !== RC || IOR_RH !== RH || RATIO_R !== RR) {
             // 加入
             IOR_RC = RC;
             IOR_RH = RH;
             this.pushData(item.game);
           }
         } else if ((ctime + (1000 * 60 * config.time)) > new Date().getTime()) {
-          if (Math.abs(s1 - s2) >= config.float) {
+          console.log(name, item.game.GID, IOR_RC, RC, IOR_RH, RH, RATIO_R, RR);
+          if ((Math.abs(s1 - s2) >= config.float) || RATIO_R !== RR) {
             //  加入
             ctime = null;
             IOR_RC = RC;
@@ -382,19 +386,21 @@ class Service {
             ec.forEach((item1) => {
               const RC = +Number(item1.game.IOR_RC).toFixed(2);
               const RH = +Number(item1.game.IOR_RH).toFixed(2);
+              const RR = item1.game.RATIO_R;
               if ((RC + RH) > config.odds) {
                 const r = Number(config.refTime) + 0;
                 const time = `0/${r} * * * * ?`;
-                this.createScheduleJob(item1.game.GID, time, item.id, item1.game.GID, RH, RC);
+                this.createScheduleJob(item1.game.GID, time, item.id, item1.game.GID, RH, RC, RR);
               }
             });
           } else if (ec instanceof Object) {
             const RC = +Number(ec.game.IOR_RC).toFixed(2);
             const RH = +Number(ec.game.IOR_RH).toFixed(2);
+            const RR = ec.game.RATIO_R;
             if ((RC + RH) > config.odds) {
               const r = Number(config.refTime) + 0;
               const time = `0/${r} * * * * ?`;
-              this.createScheduleJob(ec.game.GID, time, item.id, ec.game.GID, RH, RC);
+              this.createScheduleJob(ec.game.GID, time, item.id, ec.game.GID, RH, RC, RR);
             }
           }
         });
