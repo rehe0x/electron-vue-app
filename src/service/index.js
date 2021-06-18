@@ -1,3 +1,4 @@
+/* eslint-disable no-unreachable */
 /* eslint-disable no-unused-vars */
 /* eslint-disable no-undef */
 /* eslint-disable prefer-destructuring */
@@ -43,7 +44,7 @@ class Dao {
 
   login(username, password) {
     return this.agent
-      .post('https://m190.hga030.com/transform.php')
+      .post('https://m629.hga030.com/transform.php')
       .send({
         p: 'chk_login',
         langx: 'en-us',
@@ -67,7 +68,7 @@ class Dao {
 
   leagueAll(uid) {
     return this.agent
-      .post('https://m190.hga030.com/transform.php')
+      .post('https://m629.hga030.com/transform.php')
       .send({
         p: 'get_league_list_All',
         langx: 'zh-cn',
@@ -92,7 +93,7 @@ class Dao {
 
   leagueById(uid, lid, callback) {
     this.agent
-      .post('https://m190.hga030.com/transform.php')
+      .post('https://m629.hga030.com/transform.php')
       .send({
         langx: 'zh-cn',
         p: 'get_game_list',
@@ -100,9 +101,44 @@ class Dao {
         gtype: 'ft',
         showtype: 'today',
         rtype: 'r',
-        ltype: '4',
+        ltype: '3',
         lid,
         action: 'click_league',
+        sorttype: 'L',
+      })
+      .proxy(this.proxyURL)
+      .set({
+        ...this.baseHeader,
+        'Proxy-Authorization': this.proxyAuth,
+      })
+      .retry(3)
+      .timeout({
+        response: 50000,
+        deadline: 50000,
+      })
+      .disableTLSCerts()
+      .end((err, res) => {
+        if (err) {
+          console.log(err);
+          return;
+        }
+        callback(res);
+      });
+  }
+
+  leagueByIds(uid, lids, callback) {
+    this.agent
+      .post('https://m629.hga030.com/transform.php')
+      .send({
+        langx: 'zh-cn',
+        p: 'get_game_list',
+        date: '0',
+        gtype: 'ft',
+        showtype: 'today',
+        rtype: 'r',
+        ltype: '3',
+        lid: lids,
+        action: 'clickCoupon',
         sorttype: 'L',
       })
       .proxy(this.proxyURL)
@@ -206,6 +242,7 @@ class Service {
     if (!json.serverresponse.classifier) {
       return false;
     }
+
     const { region } = json.serverresponse.classifier;
     if (region instanceof Array) {
       region.forEach((item) => {
@@ -221,12 +258,20 @@ class Service {
     } else if (region instanceof Object) {
       list.push(json.serverresponse.classifier.region.$);
     }
+
+    if (!json.serverresponse.coupons) {
+      return false;
+    }
+    const { coupon } = json.serverresponse.coupons;
+    const lids = coupon[0].lid;
+
     fs.writeFileSync(path.join(__user_config, '/data/league.json'), JSON.stringify(list));
+    fs.writeFileSync(path.join(__user_config, '/data/lids.json'), lids);
     return true;
   }
 
   // eslint-disable-next-line class-methods-use-this
-  leagueObj(GID, LEAGUE, TEAM_H, TEAM_C, RATIO_R, IOR_RC, IOR_RH, DATETIME, CDATE) {
+  leagueObj(GID, LEAGUE, TEAM_H, TEAM_C, RATIO_R, IOR_RC, IOR_RH, DATETIME, CDATE, ECID = null) {
     return {
       GID,
       LEAGUE,
@@ -237,6 +282,7 @@ class Service {
       IOR_RH,
       DATETIME,
       CDATE,
+      ECID,
     };
     // console.log(ec.game.IOR_RH)
     // console.log(ec.game.IOR_RC)
@@ -293,6 +339,121 @@ class Service {
     fs.writeFileSync(path.join(__user_config, '/data/mon.json'), JSON.stringify(ad));
     // eslint-disable-next-line no-undef
     setCurrent(data.GID);
+  }
+
+  async getLeagueByLids(lids) {
+    return new Promise(((resolve, reject) => {
+      this.dao.leagueByIds(getUid(), lids, (data) => {
+        const lsjArr = [];
+        if (data.text === 'table id error') {
+          console.log('table id error');
+          return;
+        }
+        const json = xml2json(data.text);
+        if (json.serverresponse.msg === 'doubleLogin') {
+          console.log('not Login');
+          return;
+        }
+        const { ec } = json.serverresponse;
+        if (ec instanceof Array) {
+          ec.forEach((item1) => {
+            const RC = +Number(item1.game.IOR_RC).toFixed(2);
+            const RH = +Number(item1.game.IOR_RH).toFixed(2);
+            const obj = this.leagueObj(
+              item1.game.GID, item1.game.LEAGUE, item1.game.TEAM_H,
+              item1.game.TEAM_C, item1.game.RATIO_R,
+              RC, RH, item1.game.DATETIME, new Date().getTime(), item1.game.ECID,
+            );
+            lsjArr.push(obj);
+          });
+        } else if (ec instanceof Object) {
+          const RC = +Number(ec.game.IOR_RC).toFixed(2);
+          const RH = +Number(ec.game.IOR_RH).toFixed(2);
+          const obj = this.leagueObj(
+            ec.game.GID, ec.game.LEAGUE, ec.game.TEAM_H, ec.game.TEAM_C, ec.game.RATIO_R,
+            RC, RH, ec.game.DATETIME, new Date().getTime(), ec.game.ECID,
+          );
+          lsjArr.push(obj);
+        }
+        resolve(lsjArr);
+      });
+    }));
+  }
+
+  createScheduleJobs(time) {
+    const config = getConfig();
+    const ctime = new Date().getTime();
+
+    const lsj = fs.readFileSync(path.join(__user_config, '/data/lsj.json'));
+    if (lsj && lsj.length === 0) {
+      return;
+    }
+    const lids = fs.readFileSync(path.join(__user_config, '/data/lids.json'));
+    if (!lids) {
+      return;
+    }
+
+    const lsjArr = JSON.parse(lsj);
+    schedule.scheduleJob('createScheduleJobs', time, async () => {
+      console.log(`createScheduleJobs==========:${new Date()}`);
+      const data = await this.getLeagueByLids(lids);
+      if (!data) {
+        return;
+      }
+      lsjArr.forEach((element) => {
+        const i = data.findIndex(item => item.GID === element.GID);
+        console.log(element.GID, i);
+        if (i !== -1) {
+          const item = data[i];
+          const IOR_RC = element.IOR_RC;
+          const IOR_RH = element.IOR_RH;
+          const RATIO_R = element.RATIO_R;
+          const RC = item.IOR_RC;
+          const RH = item.IOR_RH;
+          const RR = item.RATIO_R;
+          const s1 = IOR_RC + IOR_RH;
+          const s2 = RC + RH;
+
+          if (element.status) {
+            console.log(element.status, item.ECID, item.GID, IOR_RC, RC, IOR_RH, RH, RATIO_R, RR);
+            if (IOR_RC !== RC || IOR_RH !== RH || RATIO_R !== RR) {
+              // 加入
+              element.IOR_RC = RC;
+              element.IOR_RH = RH;
+              element.RATIO_R = RR;
+              this.pushData(item);
+            }
+          } else if ((ctime + (1000 * 60 * config.time)) > new Date().getTime()) {
+            console.log(element.status, item.ECID, item.GID, IOR_RC, RC, IOR_RH, RH, RATIO_R, RR);
+            if ((Math.abs(s1 - s2) >= config.float) || RATIO_R !== RR) {
+              //  加入
+              element.status = true;
+              element.IOR_RC = RC;
+              element.IOR_RH = RH;
+              element.RATIO_R = RR;
+              this.pushData(item);
+            }
+          } else {
+            // 删除任务
+            console.log('删除', item.GID);
+            lsjArr.splice(lsjArr.findIndex(item1 => item1.GID === item.GID), 1);
+          }
+        } else {
+          const x = data.findIndex(item => item.ECID === element.ECID);
+          if (x !== -1) {
+            // 变了
+            console.log('变了', data[x].GID);
+            this.pushData(data[x]);
+            element.GID = data[x].GID;
+            element.IOR_RC = RC;
+            element.IOR_RH = RH;
+            element.RATIO_R = RR;
+          } else {
+            console.log('没有了');
+          }
+        }
+      });
+    });
   }
 
   createScheduleJob(name, time, lid, gid, IOR_RH, IOR_RC, RATIO_R) {
@@ -362,6 +523,57 @@ class Service {
         }
       });
     });
+  }
+
+  timingLeagueValids() {
+    const config = getConfig();
+    const lids = fs.readFileSync(path.join(__user_config, '/data/lids.json'));
+    if (lids) {
+      this.dao.leagueByIds(getUid(), lids, (data) => {
+        if (data.text === 'table id error') {
+          console.log('table id error');
+          return;
+        }
+        const json = xml2json(data.text);
+        if (json.serverresponse.msg === 'doubleLogin') {
+          console.log('not Login');
+          return;
+        }
+        const lsjArr = [];
+        const { ec } = json.serverresponse;
+        if (ec instanceof Array) {
+          ec.forEach((item1) => {
+            const RC = +Number(item1.game.IOR_RC).toFixed(2);
+            const RH = +Number(item1.game.IOR_RH).toFixed(2);
+            if ((RC + RH) > config.odds) {
+              const obj = this.leagueObj(
+                item1.game.GID, item1.game.LEAGUE, item1.game.TEAM_H,
+                item1.game.TEAM_C, item1.game.RATIO_R,
+                RC, RH, item1.game.DATETIME, new Date().getTime(), item1.game.ECID,
+              );
+              obj.status = false;
+              lsjArr.push(obj);
+            }
+          });
+        } else if (ec instanceof Object) {
+          const RC = +Number(ec.game.IOR_RC).toFixed(2);
+          const RH = +Number(ec.game.IOR_RH).toFixed(2);
+          if ((RC + RH) > config.odds) {
+            const obj = this.leagueObj(
+              ec.game.GID, ec.game.LEAGUE, ec.game.TEAM_H, ec.game.TEAM_C, ec.game.RATIO_R,
+              RC, RH, ec.game.DATETIME, new Date().getTime(), ec.game.ECID,
+            );
+            obj.status = false;
+            lsjArr.push(obj);
+          }
+        }
+        fs.writeFileSync(path.join(__user_config, '/data/lsj.json'), JSON.stringify(lsjArr));
+
+        const r = Number(config.refTime) + 0;
+        const time = `0/${r} * * * * ?`;
+        this.createScheduleJobs(time);
+      });
+    }
   }
 
   timingLeagueValid() {
@@ -464,31 +676,3 @@ class Service {
 
 export { Service, getConfig, setConfig };
 
-// const myDate = new Date();// 获取系统当前时间
-// console.log(new Date().getTime());
-// console.log(new Date().getTime() + (1000 * 60 * 30));
-// console.log(Math.abs(-0.12));
-// console.log(Math.abs(0.22));
-
-// se.testS('4','1')
-// se.timingLogin('caa112','bbaa1122')
-// schedule.scheduleJob('timingLogin','0/1 * * * * ?',(d,a)=>{
-//   console.log('timingLogin:' + new Date());
-//   se.timingLogin('caa112','bbaa1122')
-// });
-
-// se.timingLeagueValid()
-
-// schedule.scheduleJob('timingLeague','0 */1 * * * ?',()=>{
-//    console.log('timingLeague:' + new Date());
-//    se.timingLeague()
-// });
-
-// schedule.scheduleJob('timingLeagueValid','0 */1 * * * ?',()=>{
-//    onsole.log('timingLeagueValid:' + new Date());
-//    se.timingLeagueValid()
-// });
-
-
-// var all_jobs = schedule.scheduledJobs;
-// console.log(all_jobs)

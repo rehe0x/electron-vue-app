@@ -307,7 +307,7 @@ export default {
       if (!s) {
         this.warningAlert('今日无赛事，未登陆～');
       } else {
-        se.timingLeagueValid();
+        se.timingLeagueValids();
       }
       this.successAlert();
     },
