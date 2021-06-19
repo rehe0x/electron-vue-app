@@ -7,7 +7,7 @@
 import path from 'path';
 // eslint-disable-next-line import/no-extraneous-dependencies
 // import { remote } from 'electron';
-
+const async = require('async');
 const superagent = require('superagent');
 require('superagent-proxy')(superagent);
 
@@ -18,7 +18,6 @@ const fs = require('fs');
 const {
   getUserAgent, xml2json, getXdl, getIP,
 } = require('../common');
-
 
 const baseHeader = {
   Connection: 'keep-alive',
@@ -33,6 +32,159 @@ const baseHeader = {
   'Accept-Encoding': 'gzip, deflate, br',
 };
 
+const getUid = () => {
+  try {
+    const j = fs.readFileSync(path.join(__user_config, '/data/user.json'));
+    const { uid } = JSON.parse(j).serverresponse;
+    if (uid === undefined || uid.length === 0) {
+      throw new Error('请更换账号试试～～');
+    }
+    return uid;
+  } catch (err) {
+    errorAlert(err);
+  }
+  return null;
+};
+
+const getConfig = () => {
+  try {
+    const j = fs.readFileSync(path.join(__user_config, '/config.json'));
+    return JSON.parse(j);
+  } catch (err) {
+    errorAlert(err);
+    return null;
+  }
+};
+
+const setConfig = (odds, float, time, refTime, status, username, password, url) => {
+  try {
+    const ob = {};
+    ob.odds = odds;
+    ob.float = float;
+    ob.time = time;
+    ob.refTime = refTime;
+    ob.status = status;
+    ob.username = username;
+    ob.password = password;
+    ob.url = url;
+    fs.writeFileSync(path.join(__user_config, '/config.json'), JSON.stringify(ob));
+  } catch (err) {
+    errorAlert(err);
+  }
+  return null;
+};
+
+// eslint-disable-next-line max-len
+const leagueObj = (GID, LEAGUE, TEAM_H, TEAM_C, RATIO_R, IOR_RC, IOR_RH, DATETIME, CDATE, ECID = null) => ({
+  GID,
+  LEAGUE,
+  TEAM_H,
+  TEAM_C,
+  RATIO_R,
+  IOR_RC,
+  IOR_RH,
+  DATETIME,
+  CDATE,
+  ECID,
+});
+
+const pushData = (data) => {
+  let d = fs.readFileSync(path.join(__user_config, '/data/mon.json'));
+  if (d && d.length === 0) {
+    d = '[]';
+  }
+  const ad = JSON.parse(d);
+  const i = ad.findIndex(item => item.GID === data.GID);
+  const RC = +Number(data.IOR_RC).toFixed(2);
+  const RH = +Number(data.IOR_RH).toFixed(2);
+  if (i === -1) {
+    const obj = leagueObj(
+      data.GID, data.LEAGUE, data.TEAM_H, data.TEAM_C, data.RATIO_R,
+      RC, RH, data.DATETIME, new Date().getTime(),
+    );
+    const o1 = Object.assign({}, obj);
+    const arr = [];
+    arr.push(obj);
+    o1.arr = arr;
+    ad.push(o1);
+  } else {
+    ad[i].RATIO_R = data.RATIO_R;
+    ad[i].IOR_RC = RC;
+    ad[i].IOR_RH = RH;
+    ad[i].CDATE = new Date().getTime();
+    ad[i].arr.push(leagueObj(
+      data.GID, data.LEAGUE, data.TEAM_H, data.TEAM_C, data.RATIO_R,
+      RC, RH, data.DATETIME, new Date().getTime(),
+    ));
+  }
+  fs.writeFileSync(path.join(__user_config, '/data/mon.json'), JSON.stringify(ad));
+  // eslint-disable-next-line no-undef
+  setCurrent(data.GID);
+};
+
+const nodeQueue = async.queue((obj, callback) => {
+  console.log(`nodeQueue==========:${new Date()}|${obj}`);
+  const lsjArr = obj.lsjArr;
+  const data = obj.data;
+  const config = obj.config;
+  const ctime = obj.ctime;
+  lsjArr.forEach((element) => {
+    const i = data.findIndex(item => item.GID === element.GID);
+    // console.log(element.GID, i);
+    if (i !== -1) {
+      const item = data[i];
+      const IOR_RC = element.IOR_RC;
+      const IOR_RH = element.IOR_RH;
+      const RATIO_R = element.RATIO_R;
+      const RC = item.IOR_RC;
+      const RH = item.IOR_RH;
+      const RR = item.RATIO_R;
+      const s1 = IOR_RC + IOR_RH;
+      const s2 = RC + RH;
+
+      if (element.status) {
+        console.log(element.status, item.ECID, item.GID, IOR_RC, RC, IOR_RH, RH, RATIO_R, RR);
+        if (IOR_RC !== RC || IOR_RH !== RH || RATIO_R !== RR) {
+          // 加入
+          element.IOR_RC = RC;
+          element.IOR_RH = RH;
+          element.RATIO_R = RR;
+          pushData(item);
+        }
+      } else if ((ctime + (1000 * 60 * config.time)) > new Date().getTime()) {
+        console.log(element.status, item.ECID, item.GID, IOR_RC, RC, IOR_RH, RH, RATIO_R, RR);
+        if ((Math.abs(s1 - s2) >= config.float) || RATIO_R !== RR) {
+          //  加入
+          element.status = true;
+          element.IOR_RC = RC;
+          element.IOR_RH = RH;
+          element.RATIO_R = RR;
+          pushData(item);
+        }
+      } else {
+        // 删除任务
+        console.log('删除', item.GID);
+        lsjArr.splice(lsjArr.findIndex(item1 => item1.GID === item.GID), 1);
+      }
+    } else {
+      const x = data.findIndex(item => item.ECID === element.ECID);
+      if (x !== -1) {
+        // 变了
+        console.log('变了', data[x].GID);
+        pushData(data[x]);
+        element.GID = data[x].GID;
+        element.IOR_RC = RC;
+        element.IOR_RH = RH;
+        element.RATIO_R = RR;
+      } else {
+        console.log('没有了');
+      }
+    }
+  });
+  console.log(`nodeQueue==========關閉:${new Date()}|${obj}`);
+  callback();
+});
+
 class Dao {
   constructor(proxyURL = null, proxyAuth = null) {
     this.proxyURL = proxyURL;
@@ -43,8 +195,9 @@ class Dao {
   }
 
   login(username, password) {
+    const config = getConfig();
     return this.agent
-      .post('https://m629.hga030.com/transform.php')
+      .post(`${config.url}/transform.php`)
       .send({
         p: 'chk_login',
         langx: 'en-us',
@@ -67,8 +220,9 @@ class Dao {
   }
 
   leagueAll(uid) {
+    const config = getConfig();
     return this.agent
-      .post('https://m629.hga030.com/transform.php')
+      .post(`${config.url}/transform.php`)
       .send({
         p: 'get_league_list_All',
         langx: 'zh-cn',
@@ -92,8 +246,9 @@ class Dao {
   }
 
   leagueById(uid, lid, callback) {
+    const config = getConfig();
     this.agent
-      .post('https://m629.hga030.com/transform.php')
+      .post(`${config.url}/transform.php`)
       .send({
         langx: 'zh-cn',
         p: 'get_game_list',
@@ -127,8 +282,9 @@ class Dao {
   }
 
   leagueByIds(uid, lids, callback) {
+    const config = getConfig();
     this.agent
-      .post('https://m629.hga030.com/transform.php')
+      .post(`${config.url}/transform.php`)
       .send({
         langx: 'zh-cn',
         p: 'get_game_list',
@@ -162,47 +318,6 @@ class Dao {
   }
 }
 
-const getUid = () => {
-  try {
-    const j = fs.readFileSync(path.join(__user_config, '/data/user.json'));
-    const { uid } = JSON.parse(j).serverresponse;
-    if (uid === undefined || uid.length === 0) {
-      throw new Error('请更换账号试试～～');
-    }
-    return uid;
-  } catch (err) {
-    errorAlert(err);
-  }
-  return null;
-};
-
-const getConfig = () => {
-  try {
-    const j = fs.readFileSync(path.join(__user_config, '/config.json'));
-    return JSON.parse(j);
-  } catch (err) {
-    errorAlert(err);
-    return null;
-  }
-};
-
-const setConfig = (odds, float, time, refTime, status, username, password) => {
-  try {
-    const ob = {};
-    ob.odds = odds;
-    ob.float = float;
-    ob.time = time;
-    ob.refTime = refTime;
-    ob.status = status;
-    ob.username = username;
-    ob.password = password;
-    fs.writeFileSync(path.join(__user_config, '/config.json'), JSON.stringify(ob));
-  } catch (err) {
-    errorAlert(err);
-  }
-  return null;
-};
-
 class Service {
   constructor() {
     // const url = getXdl();
@@ -230,44 +345,49 @@ class Service {
   }
 
   async timingLeague() {
-    const r = await this.dao.leagueAll(getUid());
-    if (r.text === 'table id error') {
-      return false;
-    }
-    const json = xml2json(r.text);
-    if (json.serverresponse.msg === 'doubleLogin') {
-      return false;
-    }
-    const list = [];
-    if (!json.serverresponse.classifier) {
-      return false;
-    }
+    try {
+      const r = await this.dao.leagueAll(getUid());
+      console.log(r);
+      if (r.text === 'table id error') {
+        return 0;
+      }
+      const json = xml2json(r.text);
+      if (json.serverresponse.msg === 'doubleLogin') {
+        return 0;
+      }
+      const list = [];
+      if (!json.serverresponse.classifier) {
+        return 0;
+      }
+      console.log(json);
+      const { region } = json.serverresponse.classifier;
+      if (region instanceof Array) {
+        region.forEach((item) => {
+          const { league } = item;
+          if (league instanceof Array) {
+            league.forEach((item) => {
+              list.push(item.$);
+            });
+          } else if (league instanceof Object) {
+            list.push(league.$);
+          }
+        });
+      } else if (region instanceof Object) {
+        list.push(json.serverresponse.classifier.region.$);
+      }
 
-    const { region } = json.serverresponse.classifier;
-    if (region instanceof Array) {
-      region.forEach((item) => {
-        const { league } = item;
-        if (league instanceof Array) {
-          league.forEach((item) => {
-            list.push(item.$);
-          });
-        } else if (league instanceof Object) {
-          list.push(league.$);
-        }
-      });
-    } else if (region instanceof Object) {
-      list.push(json.serverresponse.classifier.region.$);
-    }
+      if (!json.serverresponse.coupons) {
+        return 0;
+      }
+      const { coupon } = json.serverresponse.coupons;
+      const lids = coupon[0].lid;
 
-    if (!json.serverresponse.coupons) {
-      return false;
+      fs.writeFileSync(path.join(__user_config, '/data/league.json'), JSON.stringify(list));
+      fs.writeFileSync(path.join(__user_config, '/data/lids.json'), lids);
+      return 1;
+    } catch (err) {
+      return 2;
     }
-    const { coupon } = json.serverresponse.coupons;
-    const lids = coupon[0].lid;
-
-    fs.writeFileSync(path.join(__user_config, '/data/league.json'), JSON.stringify(list));
-    fs.writeFileSync(path.join(__user_config, '/data/lids.json'), lids);
-    return true;
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -400,58 +520,8 @@ class Service {
       if (!data) {
         return;
       }
-      lsjArr.forEach((element) => {
-        const i = data.findIndex(item => item.GID === element.GID);
-        console.log(element.GID, i);
-        if (i !== -1) {
-          const item = data[i];
-          const IOR_RC = element.IOR_RC;
-          const IOR_RH = element.IOR_RH;
-          const RATIO_R = element.RATIO_R;
-          const RC = item.IOR_RC;
-          const RH = item.IOR_RH;
-          const RR = item.RATIO_R;
-          const s1 = IOR_RC + IOR_RH;
-          const s2 = RC + RH;
-
-          if (element.status) {
-            console.log(element.status, item.ECID, item.GID, IOR_RC, RC, IOR_RH, RH, RATIO_R, RR);
-            if (IOR_RC !== RC || IOR_RH !== RH || RATIO_R !== RR) {
-              // 加入
-              element.IOR_RC = RC;
-              element.IOR_RH = RH;
-              element.RATIO_R = RR;
-              this.pushData(item);
-            }
-          } else if ((ctime + (1000 * 60 * config.time)) > new Date().getTime()) {
-            console.log(element.status, item.ECID, item.GID, IOR_RC, RC, IOR_RH, RH, RATIO_R, RR);
-            if ((Math.abs(s1 - s2) >= config.float) || RATIO_R !== RR) {
-              //  加入
-              element.status = true;
-              element.IOR_RC = RC;
-              element.IOR_RH = RH;
-              element.RATIO_R = RR;
-              this.pushData(item);
-            }
-          } else {
-            // 删除任务
-            console.log('删除', item.GID);
-            lsjArr.splice(lsjArr.findIndex(item1 => item1.GID === item.GID), 1);
-          }
-        } else {
-          const x = data.findIndex(item => item.ECID === element.ECID);
-          if (x !== -1) {
-            // 变了
-            console.log('变了', data[x].GID);
-            this.pushData(data[x]);
-            element.GID = data[x].GID;
-            element.IOR_RC = RC;
-            element.IOR_RH = RH;
-            element.RATIO_R = RR;
-          } else {
-            console.log('没有了');
-          }
-        }
+      nodeQueue.push({
+        lsjArr, data, config, ctime,
       });
     });
   }

@@ -71,7 +71,7 @@
               </el-form-item>
             </el-col>
           </el-row>
-         <el-row>
+          <el-row>
             <el-col :span="12">    
               <el-form-item label="水位">
                 <el-input-number v-model="sData.odds" :min="0.1" :max="5" :step="0.1" label="分钟" style="width: 80%;"></el-input-number>
@@ -83,8 +83,11 @@
               </el-form-item>
             </el-col>
           </el-row>
-          <el-input v-model="sData.username" placeholder="账号"></el-input>
-          <el-input v-model="sData.password" placeholder="密码"></el-input>
+          <el-form-item label="请求地址">
+            <el-input v-model="sData.url" placeholder="请求地址" style="width: 90%;"></el-input>
+          </el-form-item>
+          <!-- <el-input v-model="sData.username" placeholder="账号"></el-input>
+          <el-input v-model="sData.password" placeholder="密码"></el-input> -->
           <el-form-item>
             <el-button type="primary"  v-if="sData.status === 1" @click="start" style="width: 40%;">关闭监控</el-button>
             <el-button type="primary"  v-if="sData.status === 0" @click="start" style="width: 40%;">开启监控</el-button>
@@ -235,6 +238,7 @@ export default {
         status: 0,
         username: '',
         password: '',
+        url: '',
       },
     };
   },
@@ -283,10 +287,14 @@ export default {
         this.errorAlert('请输入账号密码');
         return;
       }
+      if (this.sData.url.length === 0) {
+        this.errorAlert('请输入请求地址');
+        return;
+      }
       const st = this.sData.status === 0 ? 1 : 0;
       await setConfig(
         this.sData.odds, this.sData.float, this.sData.time,
-        this.sData.refTime, st, this.sData.username, this.sData.password,
+        this.sData.refTime, st, this.sData.username, this.sData.password, this.sData.url,
       );
       this.sData.status = st;
       if (st === 1) {
@@ -304,12 +312,14 @@ export default {
       // }
       // se.createScheduleJobLogin();
       const s = await se.timingLeague();
-      if (!s) {
+      if (s === 0) {
         this.warningAlert('今日无赛事，未登陆～');
+      } else if (s === 2) {
+        this.warningAlert('請求錯誤！請更換URL');
       } else {
         se.timingLeagueValids();
+        this.successAlert();
       }
-      this.successAlert();
     },
     details(gid) {
       const i = this.tableData.findIndex(item => item.GID === gid);
