@@ -122,7 +122,7 @@ const pushData = (data) => {
   setCurrent(data.GID);
 };
 
-const nodeQueue = async.queue((obj, callback) => {
+const nodeQueue = async.queue(async (obj, callback) => {
   console.log(`nodeQueue==========:${new Date()}|${obj}`);
   const lsjArr = obj.lsjArr;
   const data = obj.data;
