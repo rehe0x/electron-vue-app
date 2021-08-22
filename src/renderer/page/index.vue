@@ -86,8 +86,8 @@
           <el-form-item label="请求地址">
             <el-input v-model="sData.url" placeholder="请求地址" style="width: 90%;"></el-input>
           </el-form-item>
-          <!-- <el-input v-model="sData.username" placeholder="账号"></el-input>
-          <el-input v-model="sData.password" placeholder="密码"></el-input> -->
+          <el-input v-model="sData.username" placeholder="账号"></el-input>
+          <el-input v-model="sData.password" placeholder="密码"></el-input>
           <el-form-item>
             <el-button type="primary"  v-if="sData.status === 1" @click="start" style="width: 40%;">关闭监控</el-button>
             <el-button type="primary"  v-if="sData.status === 0" @click="start" style="width: 40%;">开启监控</el-button>
@@ -305,11 +305,11 @@ export default {
       }
     },
     async on() {
-      // const l = await se.timingLogin();
-      // if (!l) {
-      //   this.errorAlert('网站服务器异常~');
-      //   return;
-      // }
+      const l = await se.timingLogin();
+      if (!l) {
+        this.errorAlert('请更换网址或更换账号~');
+        return;
+      }
       // se.createScheduleJobLogin();
       const s = await se.timingLeague();
       if (s === 0) {
@@ -394,5 +394,8 @@ export default {
 
   >>> .el-button+.el-button {
     margin-left: 0px;
+  }
+  .el-form-item{
+    margin-bottom: 0
   }
 </style>

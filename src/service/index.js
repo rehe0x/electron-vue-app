@@ -169,13 +169,17 @@ const nodeQueue = async.queue(async (obj, callback) => {
     } else {
       const x = data.findIndex(item => item.ECID === element.ECID);
       if (x !== -1) {
+        const item = data[x];
+        const RC = item.IOR_RC;
+        const RH = item.IOR_RH;
+        const RR = item.RATIO_R;
         // 变了
-        console.log('变了', data[x].GID);
-        pushData(data[x]);
-        element.GID = data[x].GID;
+        console.log('变了', item);
+        element.GID = item.GID;
         element.IOR_RC = RC;
         element.IOR_RH = RH;
         element.RATIO_R = RR;
+        pushData(item);
       } else {
         console.log('没有了');
       }
@@ -225,6 +229,7 @@ class Dao {
       .post(`${config.url}/transform.php`)
       .send({
         p: 'get_league_list_All',
+        uid,
         langx: 'zh-cn',
         gtype: 'FT',
         FS: 'N',
@@ -252,6 +257,7 @@ class Dao {
       .send({
         langx: 'zh-cn',
         p: 'get_game_list',
+        uid,
         date: '0',
         gtype: 'ft',
         showtype: 'today',
@@ -288,6 +294,7 @@ class Dao {
       .send({
         langx: 'zh-cn',
         p: 'get_game_list',
+        uid,
         date: '0',
         gtype: 'ft',
         showtype: 'today',
@@ -472,6 +479,11 @@ class Service {
         const json = xml2json(data.text);
         if (json.serverresponse.msg === 'doubleLogin') {
           console.log('not Login');
+          this.timingLogin().then((item) => {
+            if (!item) {
+              errorAlert('请更换网址或更换账号~');
+            }
+          });
           return;
         }
         const { ec } = json.serverresponse;
@@ -607,6 +619,12 @@ class Service {
         const json = xml2json(data.text);
         if (json.serverresponse.msg === 'doubleLogin') {
           console.log('not Login');
+          this.timingLogin().then((item) => {
+            if (!item) {
+              errorAlert('请更换网址/更换账号~');
+            }
+          });
+
           return;
         }
         const lsjArr = [];
